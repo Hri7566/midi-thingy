@@ -46,6 +46,10 @@ function press(id, vol) {
     client.startNote(id, vol);
 }
 
+function pressSustain() {
+    gSustain = true;
+}
+
 var gSustain = false;
 
 function release(id) {
@@ -64,7 +68,7 @@ function midimessagehandler(evt) {
     //console.log(evt);
     var channel = evt[0] & 0xf;
     if (channel == 9) return;
-    if (channel == 10) return;
+    //if (channel == 10) return;
     var cmd = evt[0] >> 4;
     var note_number = evt[1];
     var vel = evt[2];
@@ -87,6 +91,15 @@ function midimessagehandler(evt) {
     }
 }
 
+function releaseSustain() {
+    gSustain = false;
+    for(var id in gSustainedNotes) {
+        if(gSustainedNotes.hasOwnProperty(id) && gSustainedNotes[id] && !gHeldNotes[id]) {
+            gSustainedNotes[id] = false;
+            client.stopNote(id);
+        }
+    }
+}
 
 input.on('message', (dt, msg) => {
     midimessagehandler(msg);
@@ -95,5 +108,5 @@ input.on('message', (dt, msg) => {
 input.openPort(1);
 
 input.on('error', err => {
-    
+
 });
