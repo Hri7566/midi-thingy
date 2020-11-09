@@ -1,18 +1,20 @@
 const Client = require('mpp-client-xt');
+const http = require('http');
+
+const fkill = require('fkill');
+const url = require('url');
+
+const { exec, spawn } = require('child_process');
 
 var client = new Client("wss://www.multiplayerpiano.com:443", undefined);
 
 const midi = require("midi");
 const output = new midi.output();
 
+output.openVirtualPort("NodeJS");
+
 client.start();
 client.setChannel("✧𝓡𝓟 𝓡𝓸𝓸𝓶✧");
-
-client.on('hi', () => {
-    console.log("live on MPP");
-});
-
-output.openVirtualPort('NodeJS');
 
 // setInterval(() => {
 //     const msg1 = [144, 64, 90];
@@ -103,10 +105,104 @@ function releaseSustain() {
 
 input.on('message', (dt, msg) => {
     midimessagehandler(msg);
+    output.sendMessage(msg);
 });
 
-input.openPort(1);
+input.openVirtualPort("NodeJS");
 
-input.on('error', err => {
+function mppchat(str) {
+    client.sendArray([{m:'a', message:`Hri7566's MIDI Bot: ${str}`}])
+}
 
+input.on('error', (err) => {
+    mppchat(err);
+    console.log(err);
 });
+
+client.on('hi', () => {
+    console.log("live on MPP");
+    // mppchat(`Online`);
+    // mppchat(`Number of open ports: ${input.getPortCount()}`);
+    // mppchat(`Connected to port: ${input.getPortName(outport)}`);
+});
+
+var proc = undefined;
+var procid = undefined;
+
+http.createServer((req, res) => {
+    let u = url.parse(req.url, true).query;
+    let robj = {};
+    robj = u;
+    if (u.file && u.port) {
+        console.log("Filename: " + u.file);
+        console.log("Port: " + input.getPortName(parseInt(u.port)));
+        // input.openVirtualPort(u.port);
+        if (u.file.indexOf("..") !== -1) {
+            console.log("illegal filename (exits midi directory)");
+            res.write("Illegal parameters");
+            res.end();
+            return;
+        }
+        proc = exec(`aplaymidi "${__dirname}/midis/${u.file}" --port 130:0`, (err, stdio, stderr) => {
+            if (err) {
+                console.error(err);
+            }
+            console.log(stderr);
+        });
+        procid = proc.pid + 1;
+        proc.unref();
+        console.log(`process id: ${procid}`);
+        // proc = spawn(`aplaymidi`, [`"${__dirname}/midis/${u.file}"`, "--port 130:0]"], {
+        //     detached: true
+        // });
+        // console.log(proc.spawnfile);
+        // console.log("child pid: " + proc.pid);
+        proc.on('close', (c, sig) => {
+            console.log(`exited with code ${c}: ${sig}`);
+        });
+    } else if (u.kill) {
+        console.log("recieved kill from http");
+        if (typeof(proc) !== "undefined") {
+            try {
+                exec(`kill ${procid}`, (err, stdio, stderr) => {
+                    if (err) {
+                        console.log(err);
+                        return;
+                    }
+                    console.log(stdio);
+                    console.log(stderr);
+                });
+            } catch (err) {
+                if (err) {
+                    console.error(err);
+                    return;
+                }
+            }
+        } else {
+            console.log("nothing to kill");
+        }
+    } else if (u.killall) {
+        console.log("recieved kill from http");
+        if (typeof(proc) !== "undefined") {
+            try {
+                exec(`killall aplaymidi`, (err, stdio, stderr) => {
+                    if (err) {
+                        console.log(err);
+                        return;
+                    }
+                    console.log(stdio);
+                    console.log(stderr);
+                });
+            } catch (err) {
+                if (err) {
+                    console.error(err);
+                    return;
+                }
+            }
+        } else {
+            console.log("nothing to kill");
+        }
+    }
+    res.write(JSON.stringify(robj));
+    res.end();
+}).listen(35214);
